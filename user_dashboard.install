@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * @file
+ * Installation file for UserDashboard. 
+ * 
+ * Handles installing/removing the module-specific database schema and variables.
+ */
+
 function user_dashboard_install() {
   variable_set('user_dashboard_available_blocks', array());
 }
@@ -104,7 +111,7 @@ function user_dashboard_schema() {
     ),
     'primary key' => array('bid'),
     'indexes' => array(
-      'list' => array(),
+      'uid' => array('uid'),
     ),
   );
   
