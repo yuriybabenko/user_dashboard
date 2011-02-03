@@ -178,7 +178,8 @@ function user_dashboard_form_block_add_block_form_alter(&$form, &$form_state) {
  */
 function user_dashboard_page_build(&$page) {
   if (_user_dashboard_visible()) {
-    global $theme_key;  
+    global $theme_key, $user;  
+    $available_blocks = variable_get('user_dashboard_available_blocks', array());
       
     // Load user dashboard blocks
     $query = db_select('user_dashboard_block', 'b');
@@ -197,10 +198,31 @@ function user_dashboard_page_build(&$page) {
     $block_info = $result->fetchAllAssoc('bid');
     // Allow modules to modify the block list.
     drupal_alter('block_list', $block_info);
-  
+    
     $user_blocks = array();
     foreach ($block_info as $b) {
-      $user_blocks[$b->region][$b->module . '_' . $b->delta] = $b;
+      //ensure that this is still a valid block, otherwise remove it and alert the user
+      $data = db_select('block', 'b')
+              ->fields('b')
+              ->condition('theme', $b->theme)
+              ->condition('module', $b->module)
+              ->condition('delta', $b->delta)
+              ->execute()
+              ->fetchAssoc();
+      
+      if (!$data || !in_array($b->module . '_' . $b->delta, $available_blocks)) {
+        drupal_set_message(t('Block !delta provided by module !module is no longer available and has been removed from your dashboard.', array('!delta' => '<em>' . $b->delta . '</em>', '!module' => '<em>' . $b->module . '</em>')), 'warning');
+        
+        db_delete('user_dashboard_block')
+          ->condition('theme', $b->theme)
+          ->condition('module', $b->module)
+          ->condition('delta', $b->delta)
+          ->condition('uid', $user->uid)
+          ->execute();
+      }
+      else {
+        $user_blocks[$b->region][$b->module . '_' . $b->delta] = $b;
+      }
     }  
 
     foreach ($user_blocks as $key => $r) {
@@ -571,7 +593,7 @@ function theme_user_dashboard_region($variables) {
  */
 function theme_user_dashboard_disabled_blocks($variables) {
   extract($variables);
-  $output = '<div class="canvas-content"><p>' . t('Drag and drop these blocks to the columns below. Changes are automatically saved. More options are available on the <a href="@dashboard-url">configuration page</a>.', array('@dashboard-url' => url('admin/dashboard/configure'))) . '</p>';
+  $output = '<div class="canvas-content"><p>' . t('Drag and drop these blocks to the columns below. Changes are automatically saved. More options are available on the UserDashboard <a href="@dashboard-url">configuration page</a>.', array('@dashboard-url' => url('admin/dashboard/user_dashboard/settings'))) . '</p>';
   $output .= '<div id="disabled-blocks"><div class="region disabled-blocks clearfix">';
   foreach ($blocks as $block) {
     $output .= theme('dashboard_disabled_block', array('block' => $block));
