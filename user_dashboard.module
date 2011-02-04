@@ -227,6 +227,10 @@ function user_dashboard_page_build(&$page) {
 
     foreach ($user_blocks as $key => $r) {
       if ($list = _block_render_blocks($r)) {
+        if (!isset($page[$key])) {
+          $page[$key] = array();
+        }
+        
         $page[$key] += _block_get_renderable_array($list);
       }    
     }      
