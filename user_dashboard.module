@@ -239,7 +239,7 @@ function user_dashboard_page_build(&$page) {
 
     // Create a wrapper for the dashboard itself, then insert each dashboard
     // region into it.
-    $page['content']['user_dashboard'] = array('#theme_wrappers' => array('dashboard'));
+    $page['content']['user_dashboard'] = array('#theme_wrappers' => array('user_dashboard'));
     foreach (_user_dashboard_regions() as $region) {
       // Insert regions even when they are empty, so that they will be
       // displayed when the dashboard is being configured.
@@ -544,7 +544,7 @@ function user_dashboard_preprocess_block(&$variables) {
 function theme_user_dashboard($variables) {
   extract($variables);
   drupal_add_css(drupal_get_path('module', 'dashboard') . '/dashboard.css');
-  return '<div id="dashboard" class="clearfix">' . $element['#children'] . '</div>';
+  return '<div id="dashboard" class="clearfix user-dashboard">' . $element['#children'] . '</div>';
 }
 
 /**
