@@ -1,11 +1,13 @@
 <?php
 
+define('USER_DASHBOARD_PERM_SET_DEFAULT', 'set default user_dashboard blocks');
+
 /************************************************************************************
  *                  DRUPAL HOOKS 
  ***********************************************************************************/
 
 /**
- * Implementation of  hook_menu();
+ * Implementation of hook_menu();
  */
 function user_dashboard_menu() {
   //shortcut to dashboard
@@ -68,12 +70,31 @@ function user_dashboard_menu() {
     'access callback'   => '_user_dashboard_access',
     'type'              => MENU_CALLBACK,
   );
+  
+  //ajax callback to set default blocks
+  $items['admin/dashboard/user_dashboard/set_default'] = array(
+    'page callback'     => 'user_dashboard_set_default',
+    'access arguments'  => array(USER_DASHBOARD_PERM_SET_DEFAULT),
+    'type'              => MENU_CALLBACK,
+  );
 
   return $items;
 }
 
 /**
- * Implementation of  hook_theme();
+ * Implementation of hook_permission();
+ */
+function user_dashboard_permission() {
+  return array(
+    USER_DASHBOARD_PERM_SET_DEFAULT => array(
+      'title' => t('Set default blocks'), 
+      'description' => t('Set default UserDashboard blocks.'),
+    ),
+  );
+}
+ 
+/**
+ * Implementation of hook_theme();
  */
 function user_dashboard_theme() {
   return array(
@@ -104,7 +125,7 @@ function user_dashboard_theme() {
 }
 
 /**
- * Implementation of  hook_block_list_alter();
+ * Implementation of hook_block_list_alter();
  *
  * Skip rendering dashboard blocks when not on the dashboard page itself. This
  * prevents expensive dashboard blocks from causing performance issues on pages
@@ -121,7 +142,7 @@ function user_dashboard_block_list_alter(&$blocks) {
 }
 
 /**
- * Implementation of  hook_form_FORM_ID_alter();
+ * Implementation of hook_form_FORM_ID_alter();
  */
 function user_dashboard_form_block_admin_display_form_alter(&$form, &$form_state, $form_id) {
   // Hide dashboard regions (and any blocks placed within them) from the block
@@ -145,7 +166,7 @@ function user_dashboard_form_block_admin_display_form_alter(&$form, &$form_state
 }
 
 /**
- * Implementation of  hook_form_FORM_ID_alter();
+ * Implementation of hook_form_FORM_ID_alter();
  */
 function user_dashboard_form_block_admin_configure_alter(&$form, &$form_state) {
   global $theme_key;
@@ -165,19 +186,31 @@ function user_dashboard_form_block_admin_configure_alter(&$form, &$form_state) {
 }
 
 /**
- * Implementation of  hook_form_FORM_ID_alter();
+ * Implementation of hook_form_FORM_ID_alter();
  */
 function user_dashboard_form_block_add_block_form_alter(&$form, &$form_state) {
   user_dashboard_form_block_admin_configure_alter($form, $form_state);
 }
 
 /**
- * Implementation of  hook_page_build();
+ * Implementation of hook_page_build();
  *
  * Display dashboard blocks in the main content region.
  */
 function user_dashboard_page_build(&$page) {
   if (_user_dashboard_visible()) {
+    $settings = array(
+      'user_dashboard' => array(
+        'set_default_blocks_access' => (int) user_access('set default user_dashboard blocks'),
+        'default_blocks_callback'   => url('admin/dashboard/user_dashboard/set_default'),
+      ),
+    );  
+
+    drupal_add_js($settings, array('type' => 'setting'));
+
+    //set weight = 1 to ensure that this gets added after the core dashboard's JS
+    drupal_add_js(drupal_get_path('module', 'user_dashboard') . '/js/user_dashboard.js', array('weight' => 1));
+	
     global $theme_key, $user;  
     $available_blocks = variable_get('user_dashboard_available_blocks', array());
       
@@ -297,7 +330,7 @@ function user_dashboard_page_build(&$page) {
 }
 
 /**
- * Implementation of  hook_system_info_alter();
+ * Implementation of hook_system_info_alter();
  *
  * Add regions to each theme to store the dashboard blocks.
  */
@@ -514,17 +547,67 @@ function user_dashboard_update() {
   drupal_exit();
 }
 
-function user_dashboard_block_view_alter(&$data, $block) {
-  if ($block->delta == 'knowledgebase-kb_latest_block') {
-    
-    $data['#attributes'] = array('test' => 'yuriytest123');
-  }
-}
+function user_dashboard_set_default() {
+  echo 'here';
 
-function user_dashboard_preprocess_block(&$variables) {
-  if (_user_dashboard_visible()) {
+/*    
+  drupal_theme_initialize();
+  global $theme_key;
 
+  // Check the form token to make sure we have a valid request.
+  if (!empty($_REQUEST['form_token']) && drupal_valid_token($_REQUEST['form_token'], 'user-dashboard-update')) {
+    parse_str($_REQUEST['regions'], $regions);
+    foreach ($regions as $region_name => $blocks) {
+      foreach ($blocks as $weight => $block_string) {
+        // Parse the query string to determine the block's module and delta.
+        preg_match('/block-([^-]+)-(.+)/', $block_string, $matches);
+        $block = new stdClass();
+        $block->module = $matches[1];
+        $block->delta = $matches[2];
+        $block->region = $region_name;
+        $block->weight = $weight;
+        $block->status = 1;
+
+        if ($block->region !== 'disabled_blocks') {
+          // Certain block module/delta combinations (like from Views blocks) may come in with an incorrect
+          // delta, where '-' are used in place of '_', so we need to ensure we're getting the right delta
+          // by querying the {blocks} table
+          $delta_obj = db_query("SELECT delta FROM {block} WHERE module = '" . $block->module . "' AND REPLACE(REPLACE(delta, '-', ''), '_', '') = '" . preg_replace('/[-_]/', '', $block->delta) . "' LIMIT 1", array(
+            ':module' => $block->module, 
+            ':delta'  => preg_replace('/[-_]/', '', $block->delta)
+          ))->fetchObject();
+          
+          $block->delta = $delta_obj->delta;
+          
+          db_merge('user_dashboard_block')
+            ->key(array(
+              'module'  => $block->module,
+              'delta'   => $block->delta,
+              'theme'   => $theme_key,
+              'uid'     => (int) arg(1),
+            ))
+            ->fields(array(
+              'status'  => $block->status,
+              'weight'  => $block->weight,
+              'region'  => $block->region,
+              'pages'   => '',
+            ))
+            ->execute();
+        }
+        else {
+          db_delete('user_dashboard_block')
+            ->condition('uid', (int) arg(1))
+            ->condition('module', $block->module)
+            ->condition('delta', $block->delta)
+            ->execute();
+        }
+      }
+    }
+    drupal_set_message(t('The configuration options have been saved.'), 'status', FALSE);
   }
+*/
+ 
+  drupal_exit();
 }
 
 /************************************************************************************
