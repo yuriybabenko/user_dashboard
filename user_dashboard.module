@@ -1,6 +1,7 @@
 <?php
 
 define('USER_DASHBOARD_PERM_SET_DEFAULT', 'set default user_dashboard blocks');
+define('USER_DASHBOARD_PERM_VIEW_ALL',    "view all users' dashboards");
 
 /************************************************************************************
  *                  DRUPAL HOOKS 
@@ -25,6 +26,7 @@ function user_dashboard_menu() {
     'description'       => 'View and customize your dashboard.',
     'page callback'     => 'user_dashboard_page',
     'access callback'   => '_user_dashboard_access',
+    'access arguments'  => array(1),
     'type'              => MENU_LOCAL_TASK,
   );
   
@@ -87,8 +89,12 @@ function user_dashboard_menu() {
 function user_dashboard_permission() {
   return array(
     USER_DASHBOARD_PERM_SET_DEFAULT => array(
-      'title' => t('Set default blocks'), 
-      'description' => t('Set default UserDashboard blocks.'),
+      'title'       => t('Set default blocks'), 
+      'description' => t('Grants access to set default UserDashboard blocks.'),
+    ),
+    USER_DASHBOARD_PERM_VIEW_ALL => array(
+      'title'       => t("View all user's dashboards."),
+      'description' => t("Grants access to view all user's dashboards."),
     ),
   );
 }
@@ -753,11 +759,21 @@ function theme_user_dashboard_disabled_block($variables) {
 
 /**
  * Checks whether the current user is allowed to access the dashboard.
+ * 
+ * @param - $account - the user account whose dashboard is being requested
  */
-function _user_dashboard_access() {
+function _user_dashboard_access($account = NULL) {
   global $user;
   
-  return (bool) $user->uid;
+  if (is_null($account)) {
+    $account = $user;
+  }
+  
+  if (!$user->uid || ($account->uid != $user->uid && !user_access(USER_DASHBOARD_PERM_VIEW_ALL))) {
+    return FALSE;
+  }
+  
+  return TRUE;
 }
 
 /**
