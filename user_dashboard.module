@@ -637,6 +637,8 @@ function user_dashboard_set_default() {
     variable_set('user_dashboard_default_blocks', $default_blocks);
     
     drupal_set_message(t('Default blocks have been set.'), 'status', FALSE);
+    
+    echo drupal_json_encode(array('messages' => theme('status_messages')));
   }
  
   drupal_exit();

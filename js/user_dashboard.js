@@ -7,10 +7,18 @@
       $('#user-dashboard-set-default').click(function (e) {
         e.preventDefault();
         
+        console.log('pre');
+        
         //send the blocks to our default blocks callback
         $.post(Drupal.settings.user_dashboard.default_blocks_callback, {
           'form_token': Drupal.settings.dashboard.formToken,
           'regions': Drupal.behaviors.dashboard.getOrder
+        }, function (data) {
+          data = $.parseJSON(data);
+          if (data.messages) {
+            $('#dashboard .canvas .messages').remove();
+            $('#dashboard .canvas .canvas-content').append(data.messages);
+          }
         });
       });
     }
