@@ -7,7 +7,11 @@
       $('#user-dashboard-set-default').click(function (e) {
         e.preventDefault();
         
-        console.log('clicked');
+        //send the blocks to our default blocks callback
+        $.post(Drupal.settings.user_dashboard.default_blocks_callback, {
+          'form_token': Drupal.settings.dashboard.formToken,
+          'regions': Drupal.behaviors.dashboard.getOrder
+        });
       });
     }
   };

@@ -9,10 +9,12 @@
 
 function user_dashboard_install() {
   variable_set('user_dashboard_available_blocks', array());
+  variable_set('user_dashboard_default_blocks', array());
 }
 
 function user_dashboard_uninstall() {
   variable_del('user_dashboard_available_blocks');
+  variable_del('user_dashboard_default_blocks');
 }
 
 /**

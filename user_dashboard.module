@@ -92,6 +92,50 @@ function user_dashboard_permission() {
     ),
   );
 }
+
+/**
+ * Implementation of hook_user_insert();
+ * 
+ * Sets default user dashboard blocks if they are defined.
+ */
+function user_dashboard_user_insert(&$edit, $account, $category) {
+  $default    = variable_get('user_dashboard_default_blocks', array());
+  $available  = variable_get('user_dashboard_available_blocks', array());
+  
+  if (!empty($default)) {
+    foreach ($default as $block) {
+      //make sure the block is still available
+      if (in_array($block->module . '_' . $block->delta, $available)) {
+        //make sure the block still actually exists
+        $data = db_select('block', 'b')
+              ->fields('b')
+              ->condition('theme',  $block->theme)
+              ->condition('module', $block->module)
+              ->condition('delta',  $block->delta)
+              ->execute()
+              ->fetchAssoc();
+              
+        if ($data) {
+          db_merge('user_dashboard_block')
+            ->key(array(
+              'module'  => $block->module,
+              'delta'   => $block->delta,
+              'theme'   => $block->theme,
+              'uid'     => $account->uid,
+            ))
+            ->fields(array(
+              'status'  => $block->status,
+              'weight'  => $block->weight,
+              'region'  => $block->region,
+              'pages'   => '',
+              'uid'     => $account->uid
+            ))
+            ->execute();
+        }        
+      }
+    }
+  }
+}
  
 /**
  * Implementation of hook_theme();
@@ -237,9 +281,9 @@ function user_dashboard_page_build(&$page) {
       //ensure that this is still a valid block, otherwise remove it and alert the user
       $data = db_select('block', 'b')
               ->fields('b')
-              ->condition('theme', $b->theme)
+              ->condition('theme',  $b->theme)
               ->condition('module', $b->module)
-              ->condition('delta', $b->delta)
+              ->condition('delta',  $b->delta)
               ->execute()
               ->fetchAssoc();
       
@@ -247,10 +291,10 @@ function user_dashboard_page_build(&$page) {
         drupal_set_message(t('Block !delta provided by module !module is no longer available and has been removed from your dashboard.', array('!delta' => '<em>' . $b->delta . '</em>', '!module' => '<em>' . $b->module . '</em>')), 'warning');
         
         db_delete('user_dashboard_block')
-          ->condition('theme', $b->theme)
+          ->condition('theme',  $b->theme)
           ->condition('module', $b->module)
-          ->condition('delta', $b->delta)
-          ->condition('uid', $user->uid)
+          ->condition('delta',  $b->delta)
+          ->condition('uid',    $user->uid)
           ->execute();
       }
       else {
@@ -475,7 +519,9 @@ function user_dashboard_settings() {
 }
 
 /**
- * AJAX callback to display the rendered contents of a specific block.
+ * AJAX callback for user/%user/dashboard/block-content/%/%
+ * 
+ * Displays the rendered contents of a specific block.
  *
  * @param $module
  *   The block's module name.
@@ -487,6 +533,8 @@ function user_dashboard_show_block_content($module, $delta) {
 }
 
 /**
+ * AJAX callback for user/%user/dashboard/update
+ *
  * Set the new weight of each region according to the drag-and-drop order.
  */
 function user_dashboard_update() {
@@ -547,26 +595,28 @@ function user_dashboard_update() {
   drupal_exit();
 }
 
+/**
+ * AJAX callback for admin/dashboard/user_dashboard/set_default
+ * 
+ * Set the default blocks that will be initialized for new user registrations.
+ */
 function user_dashboard_set_default() {
-  echo 'here';
-
-/*    
-  drupal_theme_initialize();
-  global $theme_key;
-
   // Check the form token to make sure we have a valid request.
   if (!empty($_REQUEST['form_token']) && drupal_valid_token($_REQUEST['form_token'], 'user-dashboard-update')) {
+    $default_blocks = array();
+    
     parse_str($_REQUEST['regions'], $regions);
     foreach ($regions as $region_name => $blocks) {
       foreach ($blocks as $weight => $block_string) {
         // Parse the query string to determine the block's module and delta.
         preg_match('/block-([^-]+)-(.+)/', $block_string, $matches);
         $block = new stdClass();
-        $block->module = $matches[1];
-        $block->delta = $matches[2];
-        $block->region = $region_name;
-        $block->weight = $weight;
-        $block->status = 1;
+        $block->module  = $matches[1];
+        $block->delta   = $matches[2];
+        $block->region  = $region_name;
+        $block->weight  = $weight;
+        $block->status  = 1;
+        $block->theme   = variable_get('theme_default', 'garland');
 
         if ($block->region !== 'disabled_blocks') {
           // Certain block module/delta combinations (like from Views blocks) may come in with an incorrect
@@ -579,33 +629,15 @@ function user_dashboard_set_default() {
           
           $block->delta = $delta_obj->delta;
           
-          db_merge('user_dashboard_block')
-            ->key(array(
-              'module'  => $block->module,
-              'delta'   => $block->delta,
-              'theme'   => $theme_key,
-              'uid'     => (int) arg(1),
-            ))
-            ->fields(array(
-              'status'  => $block->status,
-              'weight'  => $block->weight,
-              'region'  => $block->region,
-              'pages'   => '',
-            ))
-            ->execute();
-        }
-        else {
-          db_delete('user_dashboard_block')
-            ->condition('uid', (int) arg(1))
-            ->condition('module', $block->module)
-            ->condition('delta', $block->delta)
-            ->execute();
+          $default_blocks[] = $block;
         }
       }
     }
-    drupal_set_message(t('The configuration options have been saved.'), 'status', FALSE);
+
+    variable_set('user_dashboard_default_blocks', $default_blocks);
+    
+    drupal_set_message(t('Default blocks have been set.'), 'status', FALSE);
   }
-*/
  
   drupal_exit();
 }
